@@ -1,4 +1,4 @@
-// Тесты перевода цветов. Запуск: `node tests.js` или открыть tests.html в браузере.
+// Тесты перевода цветов. 
 const C = (typeof require !== 'undefined') ? require('./colors.js') : Colors;
 const results = [];
 function test(name, fn) {
@@ -97,7 +97,7 @@ test('Результаты всегда в допустимых диапазон
   }
 });
 
-// ---- вывод ----
+// вывод
 const failed = results.filter(r => !r.ok).length;
 if (typeof document !== 'undefined') {
   const ul = document.getElementById('out');

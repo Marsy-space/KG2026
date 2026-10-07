@@ -79,16 +79,18 @@ function rgbToHls(r,g,b){r/=255;g/=255;b/=255;
   if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;
   h*=60;if(h<0)h+=360;}
  return{h:R(h)%360,l:R(l*100),s:R(s*100)};}
+
 function hlsToRgb(h,l,s){l/=100;s/=100;h=((h%360)+360)%360;
  const c=(1-Math.abs(2*l-1))*s,x=c*(1-Math.abs((h/60)%2-1)),m=l-c/2;let r,g,b;
  if(h<60)[r,g,b]=[c,x,0];else if(h<120)[r,g,b]=[x,c,0];else if(h<180)[r,g,b]=[0,c,x];
  else if(h<240)[r,g,b]=[0,x,c];else if(h<300)[r,g,b]=[x,0,c];else[r,g,b]=[c,0,x];
  return{r:R((r+m)*255),g:R((g+m)*255),b:R((b+m)*255)};}
 const toHex=(r,g,b)=>'#'+[r,g,b].map(v=>clamp(v,0,255).toString(16).padStart(2,'0')).join('');
+
 function fromHex(x){x=x.replace('#','');if(x.length===3)x=[...x].map(c=>c+c).join('');
  const n=parseInt(x,16);return{r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
 
-/* ---- описание моделей ---- */
+/* описание моделей  */
 const css=o=>`rgb(${o.r},${o.g},${o.b})`;
 const MODELS={
  rgb:{title:'RGB',keys:[['r','R',255],['g','G',255],['b','B',255]],
@@ -105,7 +107,7 @@ const MODELS={
    return[f(v.h,v.l,0),f(v.h,v.l,100)];}}
 };
 
-/* ---- построение интерфейса ---- */
+/* построение интерфейса */
 const $=id=>document.getElementById(id);
 const host=$('models');
 for(const [name,m] of Object.entries(MODELS)){
@@ -116,7 +118,7 @@ for(const [name,m] of Object.entries(MODELS)){
  host.appendChild(card);
 }
 
-/* ---- состояние ---- */
+/*состояние*/
 let rgb={r:255,g:122,b:69};
 let hue=0,hlsS=0;          // запоминаем оттенок и насыщенность HLS отдельно
 {const h=rgbToHls(rgb.r,rgb.g,rgb.b);hue=h.h;hlsS=h.s;}
@@ -154,7 +156,7 @@ function setColor(c,skip,hlsOv){
  render(skip);
 }
 
-/* ---- ввод ---- */
+/*ввод */
 for(const name in MODELS){
  MODELS[name].keys.forEach(([k,,max])=>{
   const n=$(`${name}_${k}_n`),s=$(`${name}_${k}_s`);
@@ -175,7 +177,7 @@ $('hexInput').addEventListener('change',e=>{
  if(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v))setColor(fromHex(v));else render();
 });
 
-/* ---- палитра HLS ---- */
+/* палитра HLS*/
 function drag(el,fn){let on=false;
  const h=e=>fn(e.clientX,e.clientY,el.getBoundingClientRect());
  el.addEventListener('pointerdown',e=>{on=true;el.setPointerCapture(e.pointerId);h(e);});
