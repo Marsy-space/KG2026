@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ЛР2 · Вариант 13</title>
+<style>
+:root{--bg:#fafaf7;--fg:#1d1d1b;--card:#fff;--bd:#d9d9d2;--ac:#2a5bd7;--mut:#666;color-scheme:light dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17181a;--fg:#ececea;--card:#222427;--bd:#3a3d41;--ac:#7ea2ff;--mut:#9a9a96}}
+:root[data-theme="dark"]{--bg:#17181a;--fg:#ececea;--card:#222427;--bd:#3a3d41;--ac:#7ea2ff;--mut:#9a9a96}
+html,body{margin:0}body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:16px;max-width:1100px;margin:auto}
+h1{font-size:20px;margin:0 0 2px}h2{font-size:16px;margin:20px 0 6px}.sub{color:var(--mut);margin:0 0 14px}
+.bar,.ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
+button,select,input[type=file]{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:6px 12px}
+button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+label{display:flex;flex-direction:column;font-size:13px;color:var(--mut);min-width:170px}label b{color:var(--fg);font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:8px}
+.card canvas{width:100%;height:auto;display:block;border-radius:4px}.card p{margin:6px 2px 0;font-size:13px}
+.hide{display:none}.note{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:4px 14px 10px}
+</style></head><body>
+<h1>Лабораторная работа 2 · Вариант 13</h1>
+<p class="sub">Высокочастотные фильтры (повышение резкости) + локальная пороговая обработка (Ниблэк и Саувола, сравнение)</p>
+
+<div class="bar">
+ <select id="img"><option value="doc">Тест: документ, тень + шум</option><option value="blur">Тест: размытое изображение</option><option value="up">Своё изображение…</option></select>
+ <input type="file" id="file" accept="image/*">
+ <button id="t1" class="on">Повышение резкости</button><button id="t2">Локальный порог</button>
+</div>
+
+<div id="p1" class="ctl">
+ <label>Лапласиан, c: <b id="v1"></b><input type="range" id="c" min="0.1" max="1.5" step="0.05" value="0.5"></label>
+ <label>Нерезк. маска, радиус: <b id="v2"></b><input type="range" id="r" min="1" max="6" step="1" value="2"></label>
+ <label>Нерезк. маска, сила k: <b id="v3"></b><input type="range" id="a" min="0.5" max="4" step="0.1" value="1.5"></label>
+</div>
+<div id="p2" class="ctl hide">
+ <label>Окно, px: <b id="v4"></b><input type="range" id="w" min="7" max="101" step="2" value="31"></label>
+ <label>Ниблэк, k: <b id="v5"></b><input type="range" id="kn" min="-0.6" max="0.2" step="0.05" value="-0.2"></label>
+ <label>Саувола, k: <b id="v6"></b><input type="range" id="ks" min="0.1" max="0.6" step="0.02" value="0.34"></label>
+</div>
+
+<div class="grid" id="out"></div>
+
+<h2>Пояснения</h2>
+<div class="note">
+<p><b>Высокочастотные фильтры.</b> Резкость повышается добавлением к изображению его высокочастотной части. Лапласиан (8-связный): g = f − c·∇²f, ядро с центром 1+8c и соседями −c. Нерезкое маскирование: g = f + k·(f − G<sub>σ</sub>*f), при k&gt;1 — High-boost. Мера резкости — дисперсия лапласиана (чем больше, тем чётче границы). Слишком большие c и k усиливают шум и дают ореолы.</p>
+<p><b>Локальная пороговая обработка.</b> Порог T(x,y) считается в окне вокруг каждого пикселя по среднему m и СКО s (через интегральные изображения, O(1) на пиксель). Ниблэк: T = m + k·s. Саувола: T = m·(1 + k·(s/R − 1)), R = 128. Глобальный Оцу показан для сравнения.</p>
+<p><b>Вывод.</b> Оцу ломается на неравномерном освещении: тёмная часть листа целиком становится чёрной. Ниблэк справляется с освещением, но на пустом фоне (s ≈ 0) порог ≈ m + k·s ниже фона лишь на шум, поэтому фон покрывается чёрными точками. У Саувола при малом s порог ≈ m·(1 − k), он ниже фона заметно, поэтому фон остаётся чистым, а текст сохраняется. Лучше всего это видно на тестовом «документе с тенью и шумом».</p>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+let src=null,mode=1;
+const mk=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c};
+function gk(r){const n=2*r+1,s=r/2+.3,k=new Float32Array(n*n);let t=0;for(let j=0;j<n;j++)for(let i=0;i<n;i++){const v=Math.exp(-((i-r)**2+(j-r)**2)/(2*s*s));k[j*n+i]=v;t+=v}for(let i=0;i<k.length;i++)k[i]/=t;return{k,n}}
+function conv(d,k,n){const w=d.width,h=d.height,s=d.data,o=new Uint8ClampedArray(s.length),r=n>>1;
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++){let a=0,b=0,c=0;
+  for(let j=0;j<n;j++){const yy=Math.min(h-1,Math.max(0,y+j-r));
+   for(let i=0;i<n;i++){const xx=Math.min(w-1,Math.max(0,x+i-r)),q=(yy*w+xx)*4,v=k[j*n+i];a+=s[q]*v;b+=s[q+1]*v;c+=s[q+2]*v}}
+  const p=(y*w+x)*4;o[p]=a;o[p+1]=b;o[p+2]=c;o[p+3]=255}
+ return new ImageData(o,w,h)}
+const gray=d=>{const g=new Float32Array(d.width*d.height),s=d.data;for(let i=0;i<g.length;i++)g[i]=.299*s[4*i]+.587*s[4*i+1]+.114*s[4*i+2];return g};
+function lapVar(d){const w=d.width,h=d.height,g=gray(d);let s=0,s2=0,n=0;
+ for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x,l=g[i-1]+g[i+1]+g[i-w]+g[i+w]-4*g[i];s+=l;s2+=l*l;n++}
+ return s2/n-(s/n)**2}
+//  высокочастотные фильтры 
+function laplace(d,c){const k=new Float32Array(9).fill(-c);k[4]=1+8*c;return conv(d,k,3)}
+function unsharp(d,r,amt){const g=gk(r),b=conv(d,g.k,g.n),o=new Uint8ClampedArray(d.data.length);
+ for(let i=0;i<o.length;i++)o[i]=i%4==3?255:d.data[i]+amt*(d.data[i]-b.data[i]);
+ return new ImageData(o,d.width,d.height)}
+//  локальные пороги (интегральные изображения) 
+function localThr(d,method,win,k){const w=d.width,h=d.height,g=gray(d),W=w+1,I=new Float64Array(W*(h+1)),Q=new Float64Array(W*(h+1));
+ for(let y=0;y<h;y++){let rs=0,rq=0;for(let x=0;x<w;x++){const v=g[y*w+x];rs+=v;rq+=v*v;I[(y+1)*W+x+1]=I[y*W+x+1]+rs;Q[(y+1)*W+x+1]=Q[y*W+x+1]+rq}}
+ const o=new Uint8ClampedArray(w*h*4),r=win>>1;
+ for(let y=0;y<h;y++){const y0=Math.max(0,y-r),y1=Math.min(h,y+r+1);
+  for(let x=0;x<w;x++){const x0=Math.max(0,x-r),x1=Math.min(w,x+r+1),n=(x1-x0)*(y1-y0);
+   const S=I[y1*W+x1]-I[y0*W+x1]-I[y1*W+x0]+I[y0*W+x0],S2=Q[y1*W+x1]-Q[y0*W+x1]-Q[y1*W+x0]+Q[y0*W+x0];
+   const m=S/n,s=Math.sqrt(Math.max(0,S2/n-m*m));
+   const T=method=='n'?m+k*s:m*(1+k*(s/128-1));
+   const v=g[y*w+x]>T?255:0,p=(y*w+x)*4;o[p]=o[p+1]=o[p+2]=v;o[p+3]=255}}
+ return new ImageData(o,w,h)}
+function otsu(d){const g=gray(d),H=new Array(256).fill(0);g.forEach(v=>H[v|0]++);const N=g.length;let sum=0;for(let i=0;i<256;i++)sum+=i*H[i];
+ let wb=0,sb=0,best=0,t=0;for(let i=0;i<256;i++){wb+=H[i];if(!wb)continue;const wf=N-wb;if(!wf)break;sb+=i*H[i];const mb=sb/wb,mf=(sum-sb)/wf,v=wb*wf*(mb-mf)**2;if(v>best){best=v;t=i}}
+ const o=new Uint8ClampedArray(g.length*4);for(let i=0;i<g.length;i++){const v=g[i]>t?255:0;o[4*i]=o[4*i+1]=o[4*i+2]=v;o[4*i+3]=255}
+ return{im:new ImageData(o,d.width,d.height),t}}
+//  тестовые изображения 
+function gen(kind){const w=520,h=340,c=mk(w,h),x=c.getContext('2d');
+ x.fillStyle='#f4f4f0';x.fillRect(0,0,w,h);x.fillStyle='#111';x.font='bold 26px serif';x.fillText('Цифровая обработка',24,50);x.font='15px serif';
+ ['Локальная пороговая обработка вычисляет','порог в окрестности каждого пикселя,','поэтому справляется с неравномерным','освещением, где глобальный порог не работает.'].forEach((s,i)=>x.fillText(s,24,90+i*26));
+ x.fillRect(24,210,200,3);x.beginPath();x.arc(400,250,45,0,7);x.fill();x.fillStyle='#888';x.fillRect(250,200,70,80);
+ x.fillStyle='#222';x.font='11px serif';x.fillText('Мелкий текст: 0123456789 abcdefghij',24,310);
+ let d=x.getImageData(0,0,w,h);
+ if(kind=='doc'){const p=d.data;for(let i=0;i<w*h;i++){const px=i%w,py=(i/w)|0,s=1-.75*Math.min(1,px/w*.85+py/h*.35);
+  for(let j=0;j<3;j++)p[4*i+j]=p[4*i+j]*s+(Math.random()-.5)*34}}
+ else{const g=gk(2);d=conv(d,g.k,g.n)}
+ return d}
+function setSrc(d){src=d;render()}
+function load(){const v=$('#img').value;if(v!='up')setSrc(gen(v))}
+$('#img').onchange=()=>{if($('#img').value=='up')$('#file').click();else load()};
+$('#file').onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{const s=Math.min(1,640/im.width),c=mk(im.width*s|0,im.height*s|0),x=c.getContext('2d');x.drawImage(im,0,0,c.width,c.height);$('#img').value='up';setSrc(x.getImageData(0,0,c.width,c.height))};im.src=URL.createObjectURL(f)};
+//  вывод 
+function card(d,t,cap){const c=mk(d.width,d.height);c.getContext('2d').putImageData(d,0,0);const e=document.createElement('div');e.className='card';e.append(c);const p=document.createElement('p');p.innerHTML='<b>'+t+'</b><br>'+cap;e.append(p);$('#out').append(e)}
+const val=id=>+$('#'+id).value;
+function render(){if(!src)return;const out=$('#out');out.innerHTML='';
+ [['c','v1'],['r','v2'],['a','v3'],['w','v4'],['kn','v5'],['ks','v6']].forEach(([i,v])=>$('#'+v).textContent=$('#'+i).value);
+ if(mode==1){
+  const l=laplace(src,val('c')),u=unsharp(src,val('r'),val('a'));
+  card(src,'Оригинал','Резкость (дисперсия лапласиана): '+lapVar(src).toFixed(0));
+  card(l,'Лапласиан, c='+val('c'),'Резкость: '+lapVar(l).toFixed(0));
+  card(u,'Нерезкое маскирование','радиус '+val('r')+', k='+val('a')+'. Резкость: '+lapVar(u).toFixed(0));
+ }else{
+  const g=gray(src),o=new Uint8ClampedArray(g.length*4);for(let i=0;i<g.length;i++){o[4*i]=o[4*i+1]=o[4*i+2]=g[i];o[4*i+3]=255}
+  const O=otsu(src);
+  card(new ImageData(o,src.width,src.height),'Оригинал (градации серого)','');
+  card(localThr(src,'n',val('w'),val('kn')),'Ниблэк','окно '+val('w')+', k='+val('kn'));
+  card(localThr(src,'s',val('w'),val('ks')),'Саувола','окно '+val('w')+', k='+val('ks'));
+  card(O.im,'Глобальный Оцу (для сравнения)','порог = '+O.t);
+ }}
+document.querySelectorAll('input[type=range]').forEach(e=>e.oninput=render);
+function tab(m){mode=m;$('#t1').className=m==1?'on':'';$('#t2').className=m==2?'on':'';$('#p1').classList.toggle('hide',m!=1);$('#p2').classList.toggle('hide',m!=2);render()}
+$('#t1').onclick=()=>tab(1);$('#t2').onclick=()=>tab(2);
+load();
+</script></body></html>
