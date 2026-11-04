@@ -1,4 +1,4 @@
-// Функции перевода между RGB, CMYK и HLS. Без обращения к DOM, поэтому их легко тестировать.
+// Функции перевода между RGB, CMYK и HLS. 
 var Colors = (function () {
   const R = Math.round, clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
