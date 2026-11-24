@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ЛР 4 — Алгоритмы отсечения (вариант 13)</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#fafaf7;--fg:#1c1c1a;--mut:#6b6b66;--card:#fff;--bd:#d8d8d0;--win:#1f5fd1;--src:#d23a2e;--out:#17924a;--grid:#e6e6df;--ax:#555;--acc:#1f5fd1}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17171a;--fg:#ececea;--mut:#9a9a94;--card:#222226;--bd:#3a3a40;--win:#6aa2ff;--src:#ff7a6e;--out:#4ed483;--grid:#2e2e33;--ax:#aaa;--acc:#6aa2ff}}
+:root[data-theme="dark"]{--bg:#17171a;--fg:#ececea;--mut:#9a9a94;--card:#222226;--bd:#3a3a40;--win:#6aa2ff;--src:#ff7a6e;--out:#4ed483;--grid:#2e2e33;--ax:#aaa;--acc:#6aa2ff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 2px}
+p.s{margin:0 0 14px;color:var(--mut)}
+.g{display:grid;grid-template-columns:320px 1fr;gap:14px}
+@media(max-width:800px){.g{grid-template-columns:1fr}}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button{flex:1;padding:7px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);border-radius:8px;cursor:pointer;font:inherit}
+.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+textarea{width:100%;height:190px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;background:var(--bg);color:var(--fg);border:1px solid var(--bd);border-radius:8px;padding:8px;resize:vertical}
+.r{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.b{padding:8px 12px;border-radius:8px;border:1px solid var(--bd);background:var(--bg);color:var(--fg);cursor:pointer;font:inherit}
+.b.p{background:var(--acc);color:#fff;border-color:var(--acc)}
+.cv{width:100%;aspect-ratio:4/3;display:block;border-radius:8px;background:var(--bg)}
+.lg{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;color:var(--mut);font-size:13px}
+.lg i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:5px}
+.tw{overflow-x:auto;margin-top:14px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--bd);padding:5px 8px;text-align:left;white-space:nowrap}
+th{color:var(--mut);font-weight:600}
+.err{color:var(--src);margin-top:6px;min-height:1.2em;font-size:13px}
+small{color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<h1>Алгоритмы отсечения — лабораторная работа 4, вариант 13</h1>
+<p class="s">Часть 1: алгоритм Сазерленда–Коэна (через явное уравнение прямой). Часть 2: отсечение выпуклого многоугольника (Сазерленд–Ходжман).</p>
+<div class="g">
+ <div class="c">
+  <div class="tabs"><button id="t1" class="on">Отрезки</button><button id="t2">Многоугольник</button></div>
+  <textarea id="inp" spellcheck="false"></textarea>
+  <div class="r">
+   <button class="b p" id="run">Отсечь</button>
+   <button class="b" id="smp">Пример</button>
+   <label class="b">Загрузить файл<input type="file" id="f" accept=".txt" hidden></label>
+  </div>
+  <div class="err" id="err"></div>
+  <small id="fmt"></small>
+ </div>
+ <div class="c">
+  <canvas class="cv" id="cv"></canvas>
+  <div class="lg"><span><i style="background:var(--win)"></i>окно</span><span><i style="background:var(--src);opacity:.6"></i>исходные данные</span><span><i style="background:var(--out);height:5px"></i>видимая часть</span></div>
+ </div>
+</div>
+<div class="c tw" id="res"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const SAMPLE={
+seg:"5\n1 0 12 9\n3 3 8 6\n0 7 12 7\n11 0 11 9\n-2 -1 4 1\n2 2 10 8",
+poly:"5\n1 1\n7 -1\n13 5\n9 11\n3 9\n2 2 10 8"};
+const FMT={seg:"Формат: n, затем n строк «x1 y1 x2 y2», затем «xmin ymin xmax ymax».",
+poly:"Формат: m, затем m вершин «x y» (выпуклый многоугольник, обход по или против часовой), затем «xmin ymin xmax ymax»."};
+let mode="seg",last=null;
+
+
+function code(x,y,w){return (x<w.xmin?1:0)|(x>w.xmax?2:0)|(y<w.ymin?4:0)|(y>w.ymax?8:0)}
+const bin=c=>c.toString(2).padStart(4,"0");
+function cohenSutherland(x1,y1,x2,y2,w){
+ const c0=[code(x1,y1,w),code(x2,y2,w)];
+ const vertical=x1===x2, k=vertical?0:(y2-y1)/(x2-x1), b=vertical?0:y1-k*x1;
+ let c1=c0[0],c2=c0[1],it=0;
+ while(it++<10){
+  if(!(c1|c2)) return {vis:true,s:[x1,y1,x2,y2],c0};
+  if(c1&c2) return {vis:false,c0};
+  const out=c1?1:2, c=out===1?c1:c2;
+  let x=out===1?x1:x2, y=out===1?y1:y2;
+  if(c&1){x=w.xmin;y=vertical?y:k*x+b}
+  else if(c&2){x=w.xmax;y=vertical?y:k*x+b}
+  else if(c&4){y=w.ymin;x=vertical?x:(y-b)/k}
+  else {y=w.ymax;x=vertical?x:(y-b)/k}
+  if(!vertical&&k===0&&(c&12)) return {vis:false,c0};
+  if(out===1){x1=x;y1=y;c1=code(x,y,w)}else{x2=x;y2=y;c2=code(x,y,w)}
+ }
+ return {vis:false,c0};
+}
+
+function clipPoly(P,w){
+ const edges=[
+  [p=>p[0]>=w.xmin,(a,b)=>{const t=(w.xmin-a[0])/(b[0]-a[0]);return[w.xmin,a[1]+t*(b[1]-a[1])]}],
+  [p=>p[0]<=w.xmax,(a,b)=>{const t=(w.xmax-a[0])/(b[0]-a[0]);return[w.xmax,a[1]+t*(b[1]-a[1])]}],
+  [p=>p[1]>=w.ymin,(a,b)=>{const t=(w.ymin-a[1])/(b[1]-a[1]);return[a[0]+t*(b[0]-a[0]),w.ymin]}],
+  [p=>p[1]<=w.ymax,(a,b)=>{const t=(w.ymax-a[1])/(b[1]-a[1]);return[a[0]+t*(b[0]-a[0]),w.ymax]}]];
+ let R=P;
+ for(const [ins,isect] of edges){
+  const N=[];
+  for(let i=0;i<R.length;i++){
+   const a=R[i],b=R[(i+1)%R.length],ia=ins(a),ib=ins(b);
+   if(ia&&ib)N.push(b);
+   else if(ia&&!ib)N.push(isect(a,b));
+   else if(!ia&&ib){N.push(isect(a,b));N.push(b)}
+  }
+  R=N.filter((p,i)=>{const q=N[(i+N.length-1)%N.length];return N.length<2||p[0]!==q[0]||p[1]!==q[1]});
+  if(!R.length)break;
+ }
+ return R;
+}
+function isConvex(P){let s=0;const n=P.length;
+ for(let i=0;i<n;i++){const a=P[i],b=P[(i+1)%n],c=P[(i+2)%n];
+  const z=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);
+  if(z){if(s&&Math.sign(z)!==s)return false;s=Math.sign(z)}}
+ return true}
+
+
+function parse(){
+ const t=$("inp").value.trim().split(/\s+/).map(Number);
+ if(!t.length||t.some(isNaN))throw"В файле должны быть только числа.";
+ const n=t[0]; if(!Number.isInteger(n)||n<1)throw"Первое число — натуральное количество объектов.";
+ const per=mode==="seg"?4:2;
+ if(t.length!==1+n*per+4)throw`Ожидалось чисел: ${1+n*per+4}, найдено: ${t.length}.`;
+ const d=[];for(let i=0;i<n;i++)d.push(t.slice(1+i*per,1+(i+1)*per));
+ const q=t.slice(-4),w={xmin:q[0],ymin:q[1],xmax:q[2],ymax:q[3]};
+ if(w.xmin>=w.xmax||w.ymin>=w.ymax)throw"Окно задано неверно: нужно xmin<xmax и ymin<ymax.";
+ return{d,w};
+}
+const f=v=>(+v.toFixed(3)).toString();
+
+
+function draw(){
+ const cv=$("cv"),dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
+ cv.width=W*dpr;cv.height=H*dpr;const g=cv.getContext("2d");g.scale(dpr,dpr);
+ const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+ g.clearRect(0,0,W,H);
+ if(!last)return;
+ const {d,w,out}=last,pts=[[w.xmin,w.ymin],[w.xmax,w.ymax],[0,0]];
+ if(mode==="seg")d.forEach(s=>pts.push([s[0],s[1]],[s[2],s[3]]));else d.forEach(p=>pts.push(p));
+ const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);
+ let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+ const px=(x1-x0)*.08||1,py=(y1-y0)*.08||1;x0-=px;x1+=px;y0-=py;y1+=py;
+ const m=26,sc=Math.min((W-2*m)/(x1-x0),(H-2*m)/(y1-y0));
+ const ox=m+((W-2*m)-(x1-x0)*sc)/2,oy=H-m-((H-2*m)-(y1-y0)*sc)/2;
+ const X=x=>ox+(x-x0)*sc,Y=y=>oy-(y-y0)*sc;
+ const raw=10/sc*3,pw=Math.pow(10,Math.floor(Math.log10(raw))),st=[1,2,5,10].map(v=>v*pw).find(v=>v>=raw)||pw*10;
+ g.font="11px system-ui";g.fillStyle=css("--mut");g.strokeStyle=css("--grid");g.lineWidth=1;
+ for(let x=Math.ceil(x0/st)*st;x<=x1;x+=st){g.beginPath();g.moveTo(X(x),Y(y0));g.lineTo(X(x),Y(y1));g.stroke();
+  g.textAlign="center";g.fillText(f(x),X(x),Math.min(H-8,Math.max(12,Y(0)+13)))}
+ for(let y=Math.ceil(y0/st)*st;y<=y1;y+=st){g.beginPath();g.moveTo(X(x0),Y(y));g.lineTo(X(x1),Y(y));g.stroke();
+  g.textAlign="right";g.fillText(f(y),Math.max(26,Math.min(W-4,X(0)-4)),Y(y)-3)}
+ g.strokeStyle=css("--ax");g.lineWidth=1.4;
+ if(y0<=0&&y1>=0){g.beginPath();g.moveTo(X(x0),Y(0));g.lineTo(X(x1),Y(0));g.stroke();g.fillStyle=css("--ax");g.textAlign="right";g.fillText("x",X(x1)-2,Y(0)-5)}
+ if(x0<=0&&x1>=0){g.beginPath();g.moveTo(X(0),Y(y0));g.lineTo(X(0),Y(y1));g.stroke();g.textAlign="left";g.fillText("y",X(0)+5,Y(y1)+10)}
+ g.lineWidth=2;g.strokeStyle=css("--win");g.strokeRect(X(w.xmin),Y(w.ymax),(w.xmax-w.xmin)*sc,(w.ymax-w.ymin)*sc);
+ g.lineWidth=1.5;g.strokeStyle=css("--src");g.globalAlpha=.6;
+ if(mode==="seg"){d.forEach(s=>{g.beginPath();g.moveTo(X(s[0]),Y(s[1]));g.lineTo(X(s[2]),Y(s[3]));g.stroke()})}
+ else{g.beginPath();d.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));g.closePath();g.stroke()}
+ g.globalAlpha=1;g.strokeStyle=css("--out");g.fillStyle=css("--out");g.lineWidth=4;g.lineCap="round";
+ if(mode==="seg"){out.forEach(r=>{if(!r.vis)return;const s=r.s;g.beginPath();g.moveTo(X(s[0]),Y(s[1]));g.lineTo(X(s[2]),Y(s[3]));g.stroke()})}
+ else if(out.length){g.globalAlpha=.25;g.beginPath();out.forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));g.closePath();g.fill();g.globalAlpha=1;g.stroke()}
+}
+
+function run(){
+ $("err").textContent="";
+ try{
+  const {d,w}=parse();let out,h;
+  if(mode==="seg"){
+   out=d.map(s=>cohenSutherland(...s,w));
+   h="<table><tr><th>№</th><th>Исходный отрезок</th><th>Коды концов</th><th>Результат</th></tr>"+out.map((r,i)=>
+    `<tr><td>${i+1}</td><td>(${d[i][0]}; ${d[i][1]}) – (${d[i][2]}; ${d[i][3]})</td><td>${bin(r.c0[0])} / ${bin(r.c0[1])}</td><td>${r.vis?`(${f(r.s[0])}; ${f(r.s[1])}) – (${f(r.s[2])}; ${f(r.s[3])})`:"невидим"}</td></tr>`).join("")+"</table>";
+  }else{
+   if(d.length<3)throw"Нужно минимум 3 вершины.";
+   if(!isConvex(d))throw"Многоугольник невыпуклый — алгоритм рассчитан на выпуклый.";
+   out=clipPoly(d,w);
+   h=`<table><tr><th>Вершин было</th><th>Вершин стало</th><th>Вершины результата</th></tr><tr><td>${d.length}</td><td>${out.length}</td><td>${out.length?out.map(p=>`(${f(p[0])}; ${f(p[1])})`).join(", "):"многоугольник целиком вне окна"}</td></tr></table>`;
+  }
+  last={d,w,out};$("res").innerHTML=h;draw();
+ }catch(e){$("err").textContent=e;}
+}
+function setMode(m){mode=m;$("t1").classList.toggle("on",m==="seg");$("t2").classList.toggle("on",m==="poly");
+ $("inp").value=SAMPLE[m];$("fmt").textContent=FMT[m];last=null;$("res").innerHTML="";run()}
+$("t1").onclick=()=>setMode("seg");$("t2").onclick=()=>setMode("poly");
+$("run").onclick=run;$("smp").onclick=()=>{$("inp").value=SAMPLE[mode];run()};
+$("f").onchange=e=>{const r=new FileReader();r.onload=()=>{$("inp").value=r.result;run()};if(e.target.files[0])r.readAsText(e.target.files[0])};
+addEventListener("resize",draw);
+matchMedia("(prefers-color-scheme:dark)").addEventListener("change",draw);
+setMode("seg");
+</script>
+</body>
+</html>
